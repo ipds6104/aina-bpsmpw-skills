@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# arc42 Pre-Commit Gate CLI
+# Checks staged git changes & architecture drift thresholds deterministically.
+# ==============================================================================
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LINTER="${SCRIPT_DIR}/arc42-lint.py"
+
+if command -v arc42-lint >/dev/null 2>&1; then
+    exec arc42-lint --pre-commit "$@"
+elif [ -f "${LINTER}" ]; then
+    exec python3 "${LINTER}" --pre-commit "$@"
+else
+    echo "arc42-pre-commit: arc42-lint.py not found" >&2
+    exit 1
+fi

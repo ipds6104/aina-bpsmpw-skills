@@ -1,0 +1,24 @@
+{
+  "language": "id",
+  "name": "Indonesian",
+  "section_keywords": {
+    "1":  ["pengantar.*tujuan", "tujuan.*sasaran", "pendahuluan.*tujuan", "introduction.*goals"],
+    "2":  ["batasan.*arsitektur", "kendala.*arsitektur", "batasan", "constraints"],
+    "3":  ["konteks.*cakupan", "ruang.*lingkup", "cakupan.*konteks", "context.*scope", "scope.*context"],
+    "4":  ["strategi.*solusi", "solution.*strat"],
+    "5":  ["building.*block", "blok.*pembangun", "struktur.*komponen", "tampilan.*komponen"],
+    "6":  ["runtime.*view", "tampilan.*runtime", "alur.*eksekusi"],
+    "7":  ["deployment.*view", "tampilan.*deployment", "tampilan.*penyebaran"],
+    "8":  ["crosscutting", "lintas.*konsep", "konsep.*lintas.*sektoral", "cross.cutting"],
+    "9":  ["architecture.*decision", "keputusan.*arsitektur", "adr"],
+    "10": ["persyaratan.*mutu", "kebutuhan.*kualitas", "skenario.*kualitas", "pohon.*kualitas", "quality.*req", "quality.*scenario"],
+    "11": ["risiko.*hutang.*teknis", "risiko.*technical.*debt", "hutang.*teknis", "risk.*technical.*debt", "technical.*debt"],
+    "12": ["glosarium", "glossary", "daftar.*istilah"]
+  },
+  "patterns": {
+    "quality_property_label": ["properti mutu", "kategori mutu", "quality property"],
+    "risks_created_label":    ["risiko yang muncul", "risks created", "risiko baru"],
+    "not_measured":           ["belum diukur", "not measured", "belum terukur"],
+    "section5_header_names":  ["nama", "name", "komponen", "building block", "elemen", "modul"]
+  }
+}

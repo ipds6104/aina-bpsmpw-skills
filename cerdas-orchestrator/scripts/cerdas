@@ -169,7 +169,7 @@ class CerdasClient:
         req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method.upper())
 
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=120) as resp:
                 status = resp.status
                 raw = resp.read().decode("utf-8")
                 try:
@@ -248,6 +248,11 @@ CLI_SCHEMA = {
                 "transfer-owner": {"description": "Transfer application ownership", "args": ["app_id"], "flags": ["--owner (required)"]},
                 "delete": {"description": "Soft-delete an application", "args": ["app_id"], "flags": ["--force"]},
                 "restore": {"description": "Restore a trashed application", "args": ["app_id"]},
+                "doctor": {
+                    "description": "Audit survey validity, GSBPM completeness & mobile readiness (checks publishing, view bindings, prelist, FAB '+' and staffing)",
+                    "args": ["app_id (optional if --all)"],
+                    "flags": ["--all", "--strict", "--human"],
+                },
             },
         },
         "table": {
@@ -499,6 +504,28 @@ def cmd_app(args: argparse.Namespace, client: CerdasClient) -> None:
         if settings_payload:
             body["settings"] = settings_payload
 
+        if getattr(args, "navigation_json", None):
+            try:
+                raw_nav = args.navigation_json
+                if os.path.exists(raw_nav):
+                    with open(raw_nav, "r") as f:
+                        body["navigation"] = json.load(f)
+                else:
+                    body["navigation"] = json.loads(raw_nav)
+            except Exception as e:
+                output_result(False, message=f"Invalid JSON in --navigation-json: {e}", code=400)
+
+        if getattr(args, "view_configs_json", None):
+            try:
+                raw_views = args.view_configs_json
+                if os.path.exists(raw_views):
+                    with open(raw_views, "r") as f:
+                        body["view_configs"] = json.load(f)
+                else:
+                    body["view_configs"] = json.loads(raw_views)
+            except Exception as e:
+                output_result(False, message=f"Invalid JSON in --view-configs-json: {e}", code=400)
+
         if getattr(args, "owner", None):
             owner_val = args.owner.strip()
             if "@" in owner_val:
@@ -611,6 +638,85 @@ def cmd_app(args: argparse.Namespace, client: CerdasClient) -> None:
             output_result(False, res, message=res.get("message", "Failed to restore app."), code=status)
         output_result(True, res.get("data", res), message=f"App '{args.app_id}' restored successfully.")
 
+    elif action == "doctor":
+        is_all = getattr(args, "all", False)
+        app_id = getattr(args, "app_id", None)
+        strict = getattr(args, "strict", False)
+        human = getattr(args, "human", False) or getattr(args, "table_view", False)
+
+        if is_all or not app_id:
+            # Global survey doctor
+            status, res = client.request("GET", "/api/agent/v1/apps/doctor")
+            if status != 200:
+                output_result(False, res, message=res.get("message", "Failed to run global survey doctor."), code=status)
+
+            data = res.get("data", res)
+            if human:
+                summary = data.get("summary", {})
+                apps_list = data.get("apps", [])
+                print(f"\n🩺 CERDAS GSBPM GLOBAL SURVEY READINESS AUDIT")
+                print("=" * 75)
+                print(f"Total Surveys: {data.get('total_apps', len(apps_list))} | Ready: {summary.get('ready', 0)} | Needs Attention: {summary.get('needs_attention', 0)} | Not Ready: {summary.get('not_ready', 0)}")
+                print("-" * 75)
+                for a in apps_list:
+                    st = a.get("status", "unknown")
+                    badge = "[READY]" if st == "ready" else ("[WARN] " if st == "needs_attention" else "[FAIL] ")
+                    score = a.get("readiness_score", 0)
+                    pattern = a.get("survey_pattern", "unknown")
+                    print(f"{badge} {a.get('app_name', 'Untitled')} ({a.get('app_id')})")
+                    print(f"       Score: {score}% | Pattern: {pattern} | Failures: {a.get('failures_count', 0)} | Warnings: {a.get('warnings_count', 0)} | Remediations: {a.get('remediations_count', 0)}")
+                print("=" * 75 + "\n")
+                if strict and (summary.get("not_ready", 0) > 0 or summary.get("needs_attention", 0) > 0):
+                    sys.exit(1)
+                sys.exit(0)
+
+            # JSON mode
+            summary = data.get("summary", {})
+            if strict and (summary.get("not_ready", 0) > 0 or summary.get("needs_attention", 0) > 0):
+                output_result(False, data, message="Global readiness audit failed strict check.", code=422)
+            output_result(True, data, message="Global readiness audit completed.")
+
+        # Single survey doctor
+        status, res = client.request("GET", f"/api/agent/v1/apps/{app_id}/doctor")
+        if status != 200:
+            output_result(False, res, message=res.get("message", f"Failed to run doctor on app '{app_id}'."), code=status)
+
+        data = res.get("data", res)
+        st = data.get("status", "unknown")
+        score = data.get("readiness_score", 0)
+        remediations = data.get("remediations", [])
+
+        if human:
+            badge = "[READY]" if st == "ready" else ("[WARN] " if st == "needs_attention" else "[FAIL] ")
+            print(f"\n🩺 CERDAS SURVEY READINESS AUDIT: {data.get('app_name')} ({data.get('app_id')})")
+            print("=" * 75)
+            print(f"Status: {badge} {st.upper()} | Readiness Score: {score}% | Survey Pattern: {data.get('survey_pattern')}")
+            print("-" * 75)
+            checks = data.get("checks", [])
+            for c in checks:
+                c_st = c.get("status")
+                c_badge = "[PASS]" if c_st == "pass" else ("[WARN]" if c_st == "warn" else ("[FAIL]" if c_st == "fail" else "[INFO]"))
+                print(f" {c_badge} [{c.get('phase')}] {c.get('name')}: {c.get('message')}")
+                if c.get("fix_suggestion") and c_st in ("fail", "warn"):
+                    print(f"        -> Fix: {c.get('fix_suggestion')}")
+
+            if remediations:
+                print("\n🛠️  ACTIONABLE REMEDIATIONS:")
+                for idx, r in enumerate(remediations, 1):
+                    print(f"  {idx}. {r}")
+            print("=" * 75 + "\n")
+
+            if strict and st != "ready":
+                sys.exit(1)
+            sys.exit(0)
+
+        if strict and st != "ready":
+            output_result(False, data, message=f"Readiness audit for '{data.get('app_name')}' failed with status: {st}.", code=422,
+                          suggestion=remediations[0] if remediations else "Review checks and resolve failing items.",
+                          next_actions=remediations)
+
+        output_result(True, data, message=f"Readiness audit completed for {data.get('app_name')}.", next_actions=remediations)
+
 
 # ----- Table Handlers (GSBPM 3) -----
 
@@ -653,6 +759,16 @@ def cmd_table(args: argparse.Namespace, client: CerdasClient) -> None:
             "fields": fields,
             "publish_immediately": getattr(args, "publish", False),
         }
+        if getattr(args, "settings_json", None):
+            try:
+                body["settings"] = json.loads(args.settings_json)
+            except Exception as e:
+                output_result(False, message=f"Malformed --settings-json: {e}", code=400)
+        if getattr(args, "layout_json", None):
+            try:
+                body["layout"] = json.loads(args.layout_json)
+            except Exception as e:
+                output_result(False, message=f"Malformed --layout-json: {e}", code=400)
         status, res = client.request("POST", f"/api/agent/v1/apps/{app_id}/tables", body=body)
         if status not in (200, 201):
             output_result(False, res, message=res.get("message", "Failed to create table."), code=status)
@@ -782,9 +898,46 @@ def cmd_assignment(args: argparse.Namespace, client: CerdasClient) -> None:
     action = args.assignment_action
 
     if action == "list":
+        app_id = getattr(args, "app", None)
+        table_id = getattr(args, "table", None)
+
+        if app_id and not table_id:
+            tables = []
+            t_status, t_res = client.request("GET", f"/api/agent/v1/apps/{app_id}/tables")
+            if t_status == 200:
+                tables = t_res.get("data", [])
+            else:
+                a_status, a_res = client.request("GET", f"/api/agent/v1/apps/{app_id}")
+                if a_status == 200:
+                    tables = a_res.get("data", {}).get("tables", [])
+
+            if tables:
+                all_assignments = []
+                total = 0
+                for tbl in tables:
+                    t_id = tbl.get("id")
+                    params = {
+                        "table_id": t_id,
+                        "status": getattr(args, "status", None),
+                        "enumerator_id": getattr(args, "enumerator", None),
+                        "search": getattr(args, "search", None),
+                        "per_page": getattr(args, "limit", 50),
+                        "page": getattr(args, "page", 1),
+                    }
+                    s, r = client.request("GET", "/api/assignments", params=params)
+                    if s == 200:
+                        page_data = r.get("data", {})
+                        items = page_data.get("data", [])
+                        all_assignments.extend(items)
+                        total += page_data.get("total", len(items))
+                output_result(True, {"current_page": 1, "data": all_assignments, "total": total},
+                              message=f"Retrieved {len(all_assignments)} assignments across {len(tables)} tables in app.",
+                              fields=getattr(args, "fields", None), table_mode=getattr(args, "table_view", False))
+                return
+
         params = {
-            "app_id": getattr(args, "app", None),
-            "table_id": getattr(args, "table", None),
+            "app_id": app_id,
+            "table_id": table_id,
             "status": getattr(args, "status", None),
             "enumerator_id": getattr(args, "enumerator", None),
             "search": getattr(args, "search", None),
@@ -1051,6 +1204,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_app_update.add_argument("--end-date", help="Survey deadline schedule (ISO datetime)")
     p_app_update.add_argument("--expired-behavior", choices=["read_only", "hidden"], help="Behavior after deadline")
     p_app_update.add_argument("--settings-json", help="Custom settings JSON string")
+    p_app_update.add_argument("--navigation-json", help="Navigation tabs array JSON string or file path")
+    p_app_update.add_argument("--view-configs-json", help="View configurations mapping JSON string or file path")
     p_app_update.add_argument("--owner", help="Transfer ownership to user ID or email (SuperAdmin only)")
 
     # App Shareable Join Link (aliases: share-link, join-link)
@@ -1078,6 +1233,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_app_restore = p_app_sub.add_parser("restore", help="Restore trashed application")
     p_app_restore.add_argument("app_id", help="App ID or Slug")
 
+    p_app_doc = p_app_sub.add_parser("doctor", help="Audit survey validity, GSBPM completeness & mobile readiness")
+    p_app_doc.add_argument("app_id", nargs="?", help="App ID or Slug (optional if --all is specified)")
+    p_app_doc.add_argument("--all", action="store_true", help="Audit all active surveys in workspace")
+    p_app_doc.add_argument("--strict", action="store_true", help="Exit with code 1 if any check fails or needs attention")
+    p_app_doc.add_argument("--human", action="store_true", help="Format output as human-readable report with badges")
+
     # Table
     p_table = subparsers.add_parser("table", help="GSBPM Phase 3: Manage questionnaire tables & form instruments")
     p_table_sub = p_table.add_subparsers(dest="table_action", required=True)
@@ -1094,6 +1255,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_tbl_create.add_argument("--name", required=True, help="Table name")
     p_tbl_create.add_argument("--description", help="Table description")
     p_tbl_create.add_argument("--fields-json", help="Array of field objects in JSON string")
+    p_tbl_create.add_argument("--settings-json", help="Settings JSON string (actions, icon)")
+    p_tbl_create.add_argument("--layout-json", help="Layout JSON string (type, settings, groupBy)")
     p_tbl_create.add_argument("--publish", action="store_true", help="Publish version immediately")
 
     p_tbl_update = p_table_sub.add_parser("update", help="Update table name, description, or custom settings")

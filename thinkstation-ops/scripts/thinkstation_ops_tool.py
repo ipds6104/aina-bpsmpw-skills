@@ -118,7 +118,7 @@ def run_remote_ssh(command: str, use_sudo: bool = False, timeout: int = 30) -> s
         "thinkstation",
         full_cmd
     ]
-    return subprocess.run(ssh_args, capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(ssh_args, capture_output=True, text=True, errors="replace", timeout=timeout)
 
 
 def cmd_status(args):
