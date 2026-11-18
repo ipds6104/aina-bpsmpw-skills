@@ -12,6 +12,7 @@ Repositori terpusat untuk seluruh **Custom Skills** agen cerdas Aina yang dikhus
 * **`se-data`**: Direktori dan protokol analitik terpusat Sensus Ekonomi 2026 (SE2026) menggunakan arsitektur dataset biner kolumnar Parquet dan DuckDB OLAP streaming tanpa membebani memori server.
 
 ### 2. Utilitas Operasional Host & Pendukung
+* **`guizang-ppt-skill`**: Pembuat slide presentasi web interaktif berbasis satu berkas HTML mandiri (*single-file HTML horizontal swipe deck*) dengan latar belakang dinamis WebGL shader, mode presenter terpadu (*speaker notes, preview slide, timer, remote sync*), dan 2 pilihan gaya visual: **Style A: Electronic Magazine × E-Ink** (serif + fluid background) dan **Style B: Swiss International Style** (Helvetica/sans-serif + grid dots + high contrast functional colors).
 * **`coolify-ops`**: Manajemen siklus hidup aplikasi, service, variabel lingkungan, deployment queue, dan sinkronisasi kredensial WhatsApp Gateway pada host server Coolify ThinkStation P320.
 * **`thinkstation-ops`**: Pemantauan metrik perangkat keras host fisik (CPU, RAM, disk NVMe), inspeksi status container Docker, restart container, dan privileged remote execution.
 * **`patchright-pdf`**: Engine konversi HTML/Web ke PDF resolusi tinggi berbasis Patchright headless Chromium dengan kemampuan stealth bypass, CSS print emulation, dan pengiriman otomatis ke WhatsApp.
