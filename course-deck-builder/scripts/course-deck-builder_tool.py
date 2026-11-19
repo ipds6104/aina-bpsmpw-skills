@@ -617,6 +617,81 @@ def build_speaker_notes(title: str, topic: str):
     return notes
 
 
+
+def export_to_pptx(title, topic, level, slides_notes, output_pptx_path):
+    try:
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+        from pptx.dml.color import RGBColor
+        
+        prs = Presentation()
+        prs.slide_width = Inches(13.333)
+        prs.slide_height = Inches(7.5)
+        blank = prs.slide_layouts[6]
+        
+        dark_bg = RGBColor(15, 23, 42)
+        light_bg = RGBColor(248, 250, 252)
+        white_bg = RGBColor(255, 255, 255)
+        accent = RGBColor(37, 99, 235)
+        accent_dark = RGBColor(56, 189, 248)
+        
+        for i, s in enumerate(slides_notes):
+            slide = prs.slides.add_slide(blank)
+            is_dark = (i == 0 or i == 3 or i == 7 or i == len(slides_notes)-1)
+            bg_color = dark_bg if is_dark else (light_bg if i % 2 == 1 else white_bg)
+            fg_color = RGBColor(248, 250, 252) if is_dark else RGBColor(15, 23, 42)
+            
+            # background
+            bg_shape = slide.shapes.add_shape(1, 0, 0, Inches(13.333), Inches(7.5))
+            bg_shape.fill.solid()
+            bg_shape.fill.fore_color.rgb = bg_color
+            bg_shape.line.fill.background()
+            
+            # header
+            tb = slide.shapes.add_textbox(Inches(1.0), Inches(0.8), Inches(11.333), Inches(1.8))
+            tf = tb.text_frame
+            tf.word_wrap = True
+            
+            p_sub = tf.paragraphs[0]
+            p_sub.text = f"MODUL {i+1} · {s.get('section', 'Materi')}".upper()
+            p_sub.font.size = Pt(12)
+            p_sub.font.bold = True
+            p_sub.font.color.rgb = accent_dark if is_dark else accent
+            
+            p_t = tf.add_paragraph()
+            p_t.text = s.get('title', title)
+            p_t.font.size = Pt(30)
+            p_t.font.bold = True
+            p_t.font.color.rgb = fg_color
+            
+            # points
+            pb = slide.shapes.add_textbox(Inches(1.0), Inches(2.8), Inches(11.333), Inches(4.0))
+            ptf = pb.text_frame
+            ptf.word_wrap = True
+            
+            # purpose
+            p_purp = ptf.paragraphs[0]
+            p_purp.text = "📌 Tujuan: " + s.get('purpose', '')
+            p_purp.font.size = Pt(17)
+            p_purp.font.bold = True
+            p_purp.font.color.rgb = fg_color
+            p_purp.space_after = Pt(14)
+            
+            # talk points
+            for pt in s.get('talk', []):
+                p = ptf.add_paragraph()
+                p.text = "•  " + pt
+                p.font.size = Pt(16)
+                p.font.color.rgb = fg_color
+                p.space_after = Pt(12)
+                
+        prs.save(output_pptx_path)
+        return True
+    except Exception as e:
+        print(f"PPTX export error: {e}", file=sys.stderr)
+        return False
+
+
 def cmd_generate(args):
     gz = get_guizang_paths()
     if not gz:
@@ -687,6 +762,10 @@ def cmd_generate(args):
     output_file = output_dir / "index.html"
     output_file.write_text(rendered, encoding="utf-8")
 
+    # Generate PPTX version for mobile / Google Slides compatibility
+    output_pptx = output_dir / f"{slug}.pptx"
+    pptx_success = export_to_pptx(title, topic, level, speaker_notes, output_pptx)
+
     # Run validation via validate-presenter-mode.mjs
     validator_path = gz["validator"]
     val_status = "unverified"
@@ -732,10 +811,26 @@ def cmd_generate(args):
                     "--role", "reader"
                 ], capture_output=True, text=True)
                 up_data = json.loads(up_res.stdout) if up_res.returncode == 0 else {}
+                
+                # Also upload PPTX if available
+                pptx_link = None
+                if output_pptx.exists():
+                    up_pptx_res = subprocess.run([
+                        "python3", str(gdrive_tool_script), "drive-upload",
+                        "--file", str(output_pptx),
+                        "--name", f"{slug}.pptx",
+                        "--folder-id", sub_id,
+                        "--share", "anyone",
+                        "--role", "reader"
+                    ], capture_output=True, text=True)
+                    up_pptx_data = json.loads(up_pptx_res.stdout) if up_pptx_res.returncode == 0 else {}
+                    pptx_link = up_pptx_data.get("web_view_link")
+
                 gdrive_info = {
                     "folder_id": sub_id,
                     "folder_link": folder_data.get("web_view_link"),
-                    "file_link": up_data.get("web_view_link")
+                    "file_link": up_data.get("web_view_link"),
+                    "pptx_link": pptx_link
                 }
         except Exception as e:
             gdrive_info = {"error": str(e)}
