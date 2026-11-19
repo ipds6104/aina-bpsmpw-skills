@@ -66,6 +66,9 @@ Skill ini langsung menghasilkan **satu berkas HTML mandiri (*single-file HTML*)*
 Lokasi script helper:
 `/app/workspaces/default/data/custom-skills/course-deck-builder/scripts/course-deck-builder_tool.py`
 
+Seluruh hasil materi/slide otomatis disimpan rapi di folder khusus:
+`pembelajaran/<nama-pembelajaran>/index.html` (misal: `pembelajaran/level-abstraksi-di-computer-science/index.html`).
+
 ### 1. Pengecekan Kesiapan Modul
 ```bash
 python3 data/custom-skills/course-deck-builder/scripts/course-deck-builder_tool.py status

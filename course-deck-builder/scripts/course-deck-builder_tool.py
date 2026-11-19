@@ -17,7 +17,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 CUSTOM_SKILLS_DIR = BASE_DIR.parent
 GUIZANG_DIR = CUSTOM_SKILLS_DIR / "guizang-ppt-skill"
-DEFAULT_OUTPUT_BASE = Path("/app/workspaces/default/output/course-decks")
+DEFAULT_OUTPUT_BASE = Path("/app/workspaces/default/pembelajaran")
 
 
 def slugify(text: str) -> str:
