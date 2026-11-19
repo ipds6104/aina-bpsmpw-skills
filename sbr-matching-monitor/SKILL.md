@@ -58,6 +58,6 @@ python3 data/custom-skills/sbr-matching-monitor/scripts/sbr_monitor_tool.py scre
 
 Telah didaftarkan jadwal otomatis di Aina Scheduler:
 - **ID Tugas**: `#80` (*Monitoring Harian Matching SBR SE2026*)
-- **Waktu**: Setiap hari pukul 07:00 WIB (s.d. 20 November 2026)
+- **Waktu**: Setiap hari pukul 07:00 WIB (s.d. 11 Desember 2026)
 - **Target**: Grup WhatsApp `120363433281094659@g.us`
 - **Mekanisme**: Membuka langsung Google Sheet via Patchright Chromium, mengambil screenshot tampilan grid live, dan mengirimkannya ke WhatsApp.

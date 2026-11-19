@@ -55,10 +55,10 @@ async def capture_sheet_screenshot(spreadsheet_id, gid, output_path):
         browser = await p.chromium.launch(
             executable_path="/usr/bin/chromium",
             headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"]
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
         )
         page = await browser.new_page(viewport={"width": 1360, "height": 1200}, device_scale_factor=2)
-        await page.goto(url, wait_until="domcontentloaded")
+        await page.goto(url, wait_until="domcontentloaded", timeout=90000)
         try:
             await page.wait_for_selector("canvas", timeout=15000)
         except Exception:
@@ -112,6 +112,100 @@ def cmd_screenshot(args):
         subprocess.run(cmd, check=True)
         print("   Terkirim sukses!")
 
+def cmd_format_target(args):
+    """Menerapkan conditional formatting otomatis untuk menandai sel progress sampai nama petugas yang belum capai target harian."""
+    print("Menerapkan Conditional Formatting pada Tab 'Rekap Monitoring'...")
+    token = get_valid_access_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    spreadsheet_id = args.spreadsheet_id
+
+    # Ambil list conditional format yang ada
+    res = requests.get(f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}?fields=sheets(properties,conditionalFormats)", headers=headers)
+    rekap_sheet_id = int(args.gid)
+    rules_count = 0
+    for s in res.json().get("sheets", []):
+        if s["properties"]["sheetId"] == rekap_sheet_id:
+            rules_count = len(s.get("conditionalFormats", []))
+
+    delete_reqs = [{"deleteConditionalFormatRule": {"sheetId": rekap_sheet_id, "index": 0}} for _ in range(rules_count)]
+
+    # Rule untuk Organik (B18:G24) dan Magang (B29:G40)
+    add_reqs = [
+        {
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [
+                        {
+                            "sheetId": rekap_sheet_id,
+                            "startRowIndex": 17,
+                            "endRowIndex": 24,
+                            "startColumnIndex": 1,
+                            "endColumnIndex": 8
+                        }
+                    ],
+                    "booleanRule": {
+                        "condition": {
+                            "type": "CUSTOM_FORMULA",
+                            "values": [
+                                {
+                                    "userEnteredValue": "=AND($D18 > 0; $G18 < MIN(1; (TODAY() - DATE(2026; 11; 10)) / (DATE(2026; 12; 11) - DATE(2026; 11; 10))))"
+                                }
+                            ]
+                        },
+                        "format": {
+                            "backgroundColor": {
+                                "red": 0.98,
+                                "green": 0.86,
+                                "blue": 0.85
+                            }
+                        }
+                    }
+                },
+                "index": 0
+            }
+        },
+        {
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [
+                        {
+                            "sheetId": rekap_sheet_id,
+                            "startRowIndex": 28,
+                            "endRowIndex": 40,
+                            "startColumnIndex": 1,
+                            "endColumnIndex": 8
+                        }
+                    ],
+                    "booleanRule": {
+                        "condition": {
+                            "type": "CUSTOM_FORMULA",
+                            "values": [
+                                {
+                                    "userEnteredValue": "=AND($D29 > 0; $G29 < MIN(1; (TODAY() - DATE(2026; 11; 10)) / (DATE(2026; 12; 11) - DATE(2026; 11; 10))))"
+                                }
+                            ]
+                        },
+                        "format": {
+                            "backgroundColor": {
+                                "red": 0.98,
+                                "green": 0.86,
+                                "blue": 0.85
+                            }
+                        }
+                    }
+                },
+                "index": 1
+            }
+        }
+    ]
+
+    body = {"requests": delete_reqs + add_reqs}
+    resp = requests.post(f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}:batchUpdate", headers=headers, json=body)
+    if resp.status_code == 200:
+        print("Conditional formatting berhasil diterapkan!")
+    else:
+        print(f"Gagal menerapkan conditional formatting: {resp.text}")
+
 def main():
     parser = argparse.ArgumentParser(description="Tool Monitoring Matching SBR SE2026 Mempawah")
     parser.add_argument("--spreadsheet-id", default=SPREADSHEET_ID, help="Spreadsheet ID")
@@ -127,6 +221,10 @@ def main():
     p_sc.add_argument("-o", "--output", default="output/rekap_monitoring_sbr.png", help="Path output PNG")
     p_sc.add_argument("--send-wa", help="JID WhatsApp target pengiriman")
     p_sc.set_defaults(func=cmd_screenshot)
+
+    # format-target
+    p_fmt = subparsers.add_parser("format-target", help="Terapkan conditional formatting batas target harian s.d. 20 Nov")
+    p_fmt.set_defaults(func=cmd_format_target)
 
     args = parser.parse_args()
     args.func(args)
