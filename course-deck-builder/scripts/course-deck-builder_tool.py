@@ -706,6 +706,40 @@ def cmd_generate(args):
         except Exception as e:
             val_warnings.append(str(e))
 
+    # Optional Google Drive Upload
+    gdrive_info = None
+    if getattr(args, "gdrive", False):
+        try:
+            gdrive_tool_script = Path("/app/workspaces/default/skills/gdrive/scripts/gdrive_tool.py")
+            if not gdrive_tool_script.exists():
+                gdrive_tool_script = Path("skills/gdrive/scripts/gdrive_tool.py")
+            folder_res = subprocess.run([
+                "python3", str(gdrive_tool_script), "drive-create-folder",
+                "--name", slug,
+                "--parent", "1kbWEz96WhIRuydOVIyqMOIkJkzKXDwLt",
+                "--share", "anyone",
+                "--role", "reader"
+            ], capture_output=True, text=True)
+            folder_data = json.loads(folder_res.stdout) if folder_res.returncode == 0 else {}
+            sub_id = folder_data.get("id")
+            if sub_id:
+                up_res = subprocess.run([
+                    "python3", str(gdrive_tool_script), "drive-upload",
+                    "--file", str(output_file),
+                    "--name", f"{slug}.html",
+                    "--folder-id", sub_id,
+                    "--share", "anyone",
+                    "--role", "reader"
+                ], capture_output=True, text=True)
+                up_data = json.loads(up_res.stdout) if up_res.returncode == 0 else {}
+                gdrive_info = {
+                    "folder_id": sub_id,
+                    "folder_link": folder_data.get("web_view_link"),
+                    "file_link": up_data.get("web_view_link")
+                }
+        except Exception as e:
+            gdrive_info = {"error": str(e)}
+
     result = {
         "status": "success",
         "title": title,
@@ -717,6 +751,7 @@ def cmd_generate(args):
         "estimated_minutes": sum(n.get("minutes", 2) for n in speaker_notes),
         "output_path": str(output_file),
         "output_dir": str(output_dir),
+        "gdrive": gdrive_info,
         "validation_status": val_status,
         "validation_notes": val_warnings if val_warnings else "0 errors, presenter mode fully synced",
         "instructions": {
@@ -769,6 +804,7 @@ def main():
     p_gen.add_argument("--theme", help="Tema warna (misal: indigo-porcelain, ink-classic, ikb, lemon)")
     p_gen.add_argument("--slug", help="Slug folder output (opsional)")
     p_gen.add_argument("--output-dir", help="Lokasi folder output kustom")
+    p_gen.add_argument("--gdrive", "--upload-gdrive", action="store_true", help="Otomatis upload slide ke folder Google Drive pembelajaran")
     p_gen.set_defaults(func=cmd_generate)
 
     # list
