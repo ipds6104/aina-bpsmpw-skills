@@ -28,16 +28,23 @@ Skill ini mengatur tata kelola arsitektur, verifikasi faktual, dan mitigasi risi
 
 ---
 
-## 2. Mengapa Disparitas Data Selalu Terjadi? (The Nature of Hybrid Monitoring)
+## 2. Invarian Inti & Karakteristik Agnostik Survei (Survey-Agnostic Invariants)
 
-Dalam operasi statistik lapangan, disparitas antara sistem web dan spreadsheet manual bukan anomali kebetulan, melainkan konsekuensi alami dari dua proses yang berbeda ritme:
+Skill ini sepenuhnya **Agnostik terhadap Jenis Kegiatan Survei**. Tidak terikat apakah survei tersebut SPDT NTP, Susenas, Sakernas, Sensus Ekonomi (SE2026), Survei Pertanian, atau survei ad-hoc lainnya. 
 
-| Dimensi | Tarikan Otomatis Sistem (Fasih / Cerdas) | Isian Manual Lapangan (Google Sheets Mitra) |
-| :--- | :--- | :--- |
-| **Sifat Data** | *Hard Data / System Ground Truth* | *Soft Data / Self-Reported Estimate* |
-| **Pembaruan** | Deterministik & realtime server (misal tarikan tiap 15 menit) | Bergantung kedisiplinan dan sinyal internet mitra di lapangan |
-| **Granularitas** | Seringkali hanya di level petugas/wilayah (`OPEN`, `SUBMITTED`, `COMPLETED`) | Mampu mencakup rincian kustom (nama subsektor, komoditas, alasan drop) |
-| **Penyebab Selisih** | Belum di-submit di web, masih mode draft, atau PML belum approve | Mitra menganggap wawancara selesai di kuesioner fisik, atau lupa update link sheet |
+**INVARIAN MUTLAKNYA** adalah pola pertemuan dua kutub data berikut:
+1. **Kutub A: Tarikan Fasih (System Ground Truth)**
+   - Ditarik otomatis via script/API/scraping web Fasih (atau sistem resmi BPS terkait).
+   - Membawa status server riil: `OPEN`, `SUBMITTED`, `COMPLETED` per petugas/akun.
+   - Sifat: Obyektif, realtime server, namun seringkali asimetris (hanya menangkap agregat jumlah, tanpa rincian kustom).
+2. **Kutub B: Input Manual Google Sheet Mitra (Field Self-Reported)**
+   - Diisi mandiri oleh 10–50+ mitra lapangan (PPL/PML).
+   - Membawa rincian lapangan: subsektor, komoditas, alasan tidak eligible, catatan lapangan.
+   - Sifat: Fleksibel, kaya konteks, namun rentan latensi waktu (*human lag*) dan human error.
+
+**HUKUM RELASI INVARIAN**:
+- $\Delta\text{ (Gap)} = \text{Data Fasih} - \text{Input Manual Mitra}$
+- Setiap kali arsitektur monitoring mempertemukan Kutub A dan Kutub B, **selisih ($\Delta \neq 0$) PASTI terjadi** karena asinkronitas proses kerja di lapangan. Oleh karena itu, data Fasih dan isian manual tidak boleh diperlakukan sebagai satu entitas tunggal yang langsung saling menimpa.
 
 ---
 
