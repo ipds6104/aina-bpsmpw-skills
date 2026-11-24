@@ -44,11 +44,24 @@ def load_history() -> dict:
 def save_history(history: dict):
     HISTORY_FILE.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8")
 
-def is_posted(url: str, history: dict) -> bool:
-    clean_url = url.strip("<> ")
+def normalize_url(u: str) -> str:
+    """Normalisasi URL untuk pencocokan riwayat yang akurat."""
+    u = u.strip("<> ").rstrip("/")
+    u = u.split("?")[0].split("#")[0]
+    return u.lower()
+
+def is_posted(url: str, history: dict, title: str = "") -> bool:
+    """Cek apakah paper sudah pernah diposting berdasarkan URL atau judul yang dinormalisasi."""
+    norm_url = normalize_url(url)
+    norm_title = re.sub(r"[^a-zA-Z0-9]+", "", title).lower() if title else ""
     for item in history.get("posted", []):
-        if item.get("url", "").strip("<> ") == clean_url:
+        hist_url = normalize_url(item.get("url", ""))
+        if hist_url and hist_url == norm_url:
             return True
+        if norm_title:
+            hist_title = re.sub(r"[^a-zA-Z0-9]+", "", item.get("title", "")).lower()
+            if hist_title and hist_title == norm_title:
+                return True
     return False
 
 def fetch_latest_papers(limit: int = 20) -> list:
@@ -121,9 +134,23 @@ def fetch_paper_abstract(paper_url: str) -> dict:
     try:
         req = urllib.request.Request(jina_url, headers={"User-Agent": "Mozilla/5.0"})
         raw_md = urllib.request.urlopen(req, timeout=10).read().decode("utf-8")
-        # Potong header
-        lines = [line.strip() for line in raw_md.splitlines() if line.strip() and not line.startswith("Title:") and not line.startswith("URL Source:")]
-        abstract_text = " ".join(lines[:10])
+        clean_lines = []
+        for line in raw_md.splitlines():
+            line_str = line.strip()
+            if not line_str:
+                continue
+            if any(line_str.lower().startswith(prefix) for prefix in [
+                "title:", "url source:", "final url:", "markdown content:",
+                "cookie", "privacy", "sign in", "subscribe"
+            ]):
+                continue
+            if line_str.startswith("![") or line_str.startswith("#"):
+                continue
+            # Bersihkan markdown links [text](url) -> text
+            cleaned_line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line_str)
+            clean_lines.append(cleaned_line)
+
+        abstract_text = " ".join(clean_lines[:8])
         return {
             "source": "jina_reader",
             "title": "",
@@ -254,7 +281,7 @@ def main():
         papers = fetch_latest_papers(args.limit)
         print(f"=== DAFTAR PAPER FRONTIER AI TERBARU (Total: {len(papers)}) ===")
         for i, p in enumerate(papers):
-            status_tag = "[POSTED]" if is_posted(p["url"], history) else "[NEW]   "
+            status_tag = "[POSTED]" if is_posted(p["url"], history, p.get("title", "")) else "[NEW]   "
             print(f"{i+1:2d}. {status_tag} [{p['date']}] {p['lab']}: {p['title']}")
             print(f"    URL: {p['url']}")
 
@@ -267,7 +294,7 @@ def main():
 
     elif args.subcommand == "next":
         papers = fetch_latest_papers(20)
-        unposted = [p for p in papers if not is_posted(p["url"], history)]
+        unposted = [p for p in papers if not is_posted(p["url"], history, p.get("title", ""))]
         if not unposted:
             print(json.dumps({"error": "Tidak ada paper baru yang belum diposting", "has_next": False}))
             sys.exit(0)
@@ -297,7 +324,7 @@ def main():
                     target = papers[idx]
             else:
                 # Cari yang pertama belum dipost
-                unposted = [p for p in papers if not is_posted(p["url"], history)]
+                unposted = [p for p in papers if not is_posted(p["url"], history, p.get("title", ""))]
                 if unposted:
                     target = unposted[0]
                 elif papers:
