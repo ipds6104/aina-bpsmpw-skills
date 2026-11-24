@@ -56,8 +56,4 @@ python3 data/custom-skills/sbr-matching-monitor/scripts/sbr_monitor_tool.py scre
 
 ## 3. Jadwal Rutin Harian (Scheduler)
 
-Telah didaftarkan jadwal otomatis di Aina Scheduler:
-- **ID Tugas**: `#80` (*Monitoring Harian Matching SBR SE2026*)
-- **Waktu**: Setiap hari pukul 07:00 WIB (s.d. 11 Desember 2026)
-- **Target**: Grup WhatsApp `120363433281094659@g.us`
-- **Mekanisme**: Membuka langsung Google Sheet via Patchright Chromium, mengambil screenshot tampilan grid live, dan mengirimkannya ke WhatsApp.
+- **ID Tugas**: `#80` (*Monitoring Harian Matching SBR SE2026*) — *STATUS: SELESAI & DINONAKTIFKAN* (per 24 November 2026, target 2.522 kasus telah tercapai 100%). Jadwal rutin pengiriman screenshot otomatis ke grup telah resmi dihapus dari sistem scheduler.
