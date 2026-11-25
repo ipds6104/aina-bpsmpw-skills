@@ -52,13 +52,17 @@ async def capture_sheet_screenshot(spreadsheet_id, gid, output_path):
     url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit#gid={gid}"
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            executable_path="/usr/bin/chromium",
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
-        )
+        launch_kwargs = {
+            "headless": True,
+            "args": ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--headless=new"]
+        }
+        if not (p.chromium.executable_path and Path(p.chromium.executable_path).exists()):
+            if Path("/usr/bin/chromium").exists():
+                launch_kwargs["executable_path"] = "/usr/bin/chromium"
+
+        browser = await p.chromium.launch(**launch_kwargs)
         page = await browser.new_page(viewport={"width": 1360, "height": 1200}, device_scale_factor=2)
-        await page.goto(url, wait_until="domcontentloaded", timeout=90000)
+        await page.goto(url, wait_until="domcontentloaded")
         try:
             await page.wait_for_selector("canvas", timeout=15000)
         except Exception:
@@ -148,7 +152,7 @@ def cmd_format_target(args):
                             "type": "CUSTOM_FORMULA",
                             "values": [
                                 {
-                                    "userEnteredValue": "=AND($D18 > 0; $G18 < MIN(1; (TODAY() - DATE(2026; 11; 10)) / (DATE(2026; 12; 11) - DATE(2026; 11; 10))))"
+                                    "userEnteredValue": "=AND($D18 > 0; $G18 < MIN(1; (TODAY() - DATE(2026; 11; 10)) / (DATE(2026; 11; 20) - DATE(2026; 11; 10))))"
                                 }
                             ]
                         },
@@ -181,7 +185,7 @@ def cmd_format_target(args):
                             "type": "CUSTOM_FORMULA",
                             "values": [
                                 {
-                                    "userEnteredValue": "=AND($D29 > 0; $G29 < MIN(1; (TODAY() - DATE(2026; 11; 10)) / (DATE(2026; 12; 11) - DATE(2026; 11; 10))))"
+                                    "userEnteredValue": "=AND($D29 > 0; $G29 < MIN(1; (TODAY() - DATE(2026; 11; 10)) / (DATE(2026; 11; 20) - DATE(2026; 11; 10))))"
                                 }
                             ]
                         },

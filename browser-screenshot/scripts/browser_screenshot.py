@@ -45,22 +45,37 @@ async def capture_screenshot(
     is_google_docs = "docs.google.com" in target_url
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            executable_path="/usr/bin/chromium",
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-gpu",
-                "--disable-dev-shm-usage"
-            ]
-        )
+        # Patchright Stealth Chromium: gunakan binary patched bawaan Patchright secara default
+        launch_args = [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--headless=new"
+        ]
+        launch_kwargs = {
+            "headless": True,
+            "args": launch_args
+        }
+        if p.chromium.executable_path and Path(p.chromium.executable_path).exists():
+            pass  # Gunakan binary patchright resmi yang sudah di-patch otomatis
+        elif Path("/usr/bin/chromium").exists():
+            launch_kwargs["executable_path"] = "/usr/bin/chromium"
+
+        browser = await p.chromium.launch(**launch_kwargs)
 
         color_scheme = "dark" if dark_mode else "light"
         context = await browser.new_context(
             viewport={"width": width, "height": height},
             device_scale_factor=scale,
-            color_scheme=color_scheme
+            color_scheme=color_scheme,
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            locale="id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+            timezone_id="Asia/Jakarta",
+            extra_http_headers={
+                "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+                "sec-ch-ua-mobile": "?0",
+                "sec-ch-ua-platform": '"Linux"'
+            }
         )
         page = await context.new_page()
 

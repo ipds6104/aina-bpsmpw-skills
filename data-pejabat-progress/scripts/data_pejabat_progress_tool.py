@@ -602,11 +602,15 @@ async def render_screenshot(html_str, output_path):
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            executable_path="/usr/bin/chromium",
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"]
-        )
+        launch_kwargs = {
+            "headless": True,
+            "args": ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--headless=new"]
+        }
+        if not (p.chromium.executable_path and Path(p.chromium.executable_path).exists()):
+            if Path("/usr/bin/chromium").exists():
+                launch_kwargs["executable_path"] = "/usr/bin/chromium"
+
+        browser = await p.chromium.launch(**launch_kwargs)
         page = await browser.new_page(viewport={"width": 1200, "height": 900}, device_scale_factor=2)
         await page.goto(f"file://{temp_html}")
         await page.screenshot(path=output_path, full_page=True)
