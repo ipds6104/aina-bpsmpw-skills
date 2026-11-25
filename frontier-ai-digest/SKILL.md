@@ -75,3 +75,4 @@ aina schedule add \
 - **Ultra-Fast Abstract**: Menggunakan endpoint REST ArXiv Atom API (< 300 ms) untuk paper ArXiv.
 - **State Tracker Anti-Duplikasi**: Seluruh tautan paper yang sudah diposting dicatat permanen di `/app/data/frontier_ai_history.json`.
 - **Viewport Optimal Mobile**: Menggunakan `browser-screenshot` pada resolusi 1080x1200 dengan jeda 2 detik dan Retina HiDPI scale.
+- **Anti-Cloudflare Challenge & Zero Bad Screenshot Guarantee**: Dilengkapi verifikasi mandiri sebelum memposting status. Jika target web memicu Cloudflare bot challenge, paywall, atau CAPTCHA ("Just a moment...", "Security verification", 403), sistem otomatis menolak screenshot tersebut dan beralih ke engine perender kartu visual (Paper Digest Card) beresolusi tinggi (1080x1200 dark aesthetic) sehingga status yang diposting selalu bersih dan terbaca sempurna.

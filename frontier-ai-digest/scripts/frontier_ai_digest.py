@@ -12,6 +12,7 @@ import re
 import sys
 import json
 import time
+import html
 import hashlib
 import argparse
 import subprocess
@@ -216,19 +217,298 @@ def synthesize_heuristic_summary(title: str, lab: str, url: str, abstract: str) 
     )
     return caption
 
-def capture_screenshot(url: str, output_path: Path) -> bool:
-    """Mengambil screenshot web/paper menggunakan engine browser-screenshot."""
+def render_digest_card(title: str, lab: str, date: str, url: str, abstract: str, output_path: Path) -> bool:
+    """Merender kartu visual paper digest (HTML template) beresolusi tinggi sebagai fallback jika web diblokir bot challenge."""
+    sentences = [s.strip() for s in abstract.split(".") if s.strip()]
+    p1 = sentences[0] if len(sentences) > 0 else "Tantangan dalam penalaran sistem AI modern."
+    if len(sentences) > 1:
+        p1 += ". " + sentences[1] + "."
+    else:
+        p1 += "."
+
+    p2 = ""
+    for s in sentences[2:]:
+        if any(w in s.lower() for w in ["propose", "introduce", "survey", "world state", "method", "result", "solusinya", "kami "]):
+            p2 += s + ". "
+            if len(p2) > 220:
+                break
+    if not p2:
+        p2 = " ".join(sentences[2:4]) + "." if len(sentences) >= 4 else "Pendekatan inovatif untuk memajukan kapabilitas kecerdasan buatan frontier."
+
+    card_html = f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }}
+  body {{
+    width: 1080px;
+    height: 1200px;
+    background: #080c14;
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    position: relative;
+    overflow: hidden;
+  }}
+  .glow-1 {{
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    top: -150px;
+    left: -150px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.22) 0%, rgba(99, 102, 241, 0) 70%);
+    filter: blur(50px);
+    z-index: 1;
+  }}
+  .glow-2 {{
+    position: absolute;
+    width: 550px;
+    height: 550px;
+    bottom: -100px;
+    right: -100px;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0) 70%);
+    filter: blur(50px);
+    z-index: 1;
+  }}
+  .card {{
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(24px);
+    border-radius: 36px;
+    padding: 60px 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }}
+  .header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }}
+  .badge-tag {{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    border-radius: 9999px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: rgba(99, 102, 241, 0.15);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+  }}
+  .lab-badge {{
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 20px;
+    border-radius: 9999px;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+  }}
+  .title-section {{
+    margin-bottom: 28px;
+  }}
+  .paper-title {{
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1.25;
+    color: #ffffff;
+    margin-bottom: 16px;
+    letter-spacing: -0.02em;
+  }}
+  .meta-bar {{
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 16px;
+    color: #94a3b8;
+  }}
+  .meta-item {{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }}
+  .divider {{
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.05) 100%);
+    margin: 20px 0 28px 0;
+  }}
+  .content-boxes {{
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    flex: 1;
+  }}
+  .box {{
+    background: rgba(30, 41, 59, 0.6);
+    border-radius: 20px;
+    padding: 24px 28px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    position: relative;
+    overflow: hidden;
+  }}
+  .box::before {{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 6px;
+    height: 100%;
+  }}
+  .box-problem::before {{
+    background: #f59e0b;
+  }}
+  .box-solution::before {{
+    background: #10b981;
+  }}
+  .box-label {{
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }}
+  .box-problem .box-label {{ color: #fbbf24; }}
+  .box-solution .box-label {{ color: #34d399; }}
+  .box-text {{
+    font-size: 19px;
+    line-height: 1.5;
+    color: #cbd5e1;
+  }}
+  .footer {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 15px;
+    color: #64748b;
+  }}
+  .footer-url {{
+    font-family: monospace;
+    color: #818cf8;
+    max-width: 600px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }}
+</style>
+</head>
+<body>
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+  <div class="card">
+    <div>
+      <div class="header">
+        <div class="badge-tag">🔬 Frontier AI Paper Digest</div>
+        <div class="lab-badge">{html.escape(lab)}</div>
+      </div>
+      <div class="title-section">
+        <h1 class="paper-title">{html.escape(title)}</h1>
+        <div class="meta-bar">
+          <span class="meta-item">📅 {html.escape(date or "Frontier Archive")}</span>
+          <span>•</span>
+          <span class="meta-item">🌐 Frontier AI Research</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+    </div>
+
+    <div class="content-boxes">
+      <div class="box box-problem">
+        <div class="box-label">⚡ The Core Challenge / Problem</div>
+        <div class="box-text">{html.escape(p1)}</div>
+      </div>
+      <div class="box box-solution">
+        <div class="box-label">🚀 Method & Key Breakthrough</div>
+        <div class="box-text">{html.escape(p2)}</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-url">🔗 {html.escape(url)}</div>
+      <div>Curated by Aina • Frontier AI Digest</div>
+    </div>
+  </div>
+</body>
+</html>"""
+
+    temp_html = CACHE_DIR / f"temp_card_{int(time.time())}.html"
+    try:
+        temp_html.write_text(card_html, encoding="utf-8")
+        cmd = [
+            "python3", BROWSER_SCREENSHOT_SCRIPT,
+            f"file://{temp_html}",
+            "-o", str(output_path),
+            "--width", "1080",
+            "--height", "1200",
+            "--delay", "0.5"
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return output_path.exists() and output_path.stat().st_size > 1000
+    finally:
+        if temp_html.exists():
+            try:
+                temp_html.unlink()
+            except Exception:
+                pass
+
+def capture_screenshot(target: dict, meta: dict, output_path: Path) -> bool:
+    """Mengambil screenshot web/paper dengan verifikasi anti-challenge & fallback render visual card."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    paper_url = target.get("url", "")
+    
+    # 1. Jalankan pengambilan langsung dengan validasi challenge
+    print(f"[Frontier AI Digest] Membuka URL & memvalidasi screenshot: {paper_url}...")
     cmd = [
         "python3", BROWSER_SCREENSHOT_SCRIPT,
-        url,
+        paper_url,
         "-o", str(output_path),
         "--width", "1080",
         "--height", "1200",
-        "--delay", "2.0"
+        "--delay", "2.0",
+        "--fail-on-challenge"
     ]
     res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    return output_path.exists() and output_path.stat().st_size > 1000
+
+    # 2. Periksa apakah valid (exit code 0 dan berkas terbentuk)
+    if res.returncode == 0 and output_path.exists() and output_path.stat().st_size > 1000:
+        print(f"[Frontier AI Digest] Verifikasi lolos: Screenshot web asli valid dan bebas bot challenge.")
+        return True
+
+    # 3. Jika gagal atau terdeteksi Cloudflare challenge (exit code 2)
+    print(f"[Frontier AI Digest] WARN: Screenshot web '{paper_url}' diblokir bot challenge/Cloudflare atau gagal dimuat.")
+    print(f"[Frontier AI Digest] Mengaktifkan fallback: Merender visual digest card berkualitas tinggi...")
+
+    paper_title = meta.get("title") or target.get("title", "")
+    abstract_text = meta.get("abstract", "")
+    lab = target.get("lab", "Frontier AI")
+    date_str = target.get("date", "")
+
+    ok_card = render_digest_card(paper_title, lab, date_str, paper_url, abstract_text, output_path)
+    if ok_card:
+        print(f"[Frontier AI Digest] Sukses: Visual digest card berhasil dirender ke: {output_path}")
+        return True
+
+    return False
 
 def post_status(file_path: Path, caption: str) -> dict:
     """Mengirim status story media ke WhatsApp via wa_tool.py."""
@@ -350,7 +630,7 @@ def main():
         img_path = CACHE_DIR / f"{slug}_{url_hash}.png"
 
         print(f"Mengambil screenshot: {target['url']} -> {img_path}...")
-        ok_shot = capture_screenshot(target["url"], img_path)
+        ok_shot = capture_screenshot(target, meta, img_path)
         if not ok_shot:
             print(f"[Warning] Gagal mengambil screenshot berkualitas tinggi, memeriksa file: {img_path}", file=sys.stderr)
 

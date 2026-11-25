@@ -35,7 +35,8 @@ async def capture_screenshot(
     wait_selector: str = None,
     delay: float = 2.0,
     timeout_sec: int = 30,
-    dark_mode: bool = False
+    dark_mode: bool = False,
+    fail_on_challenge: bool = False
 ):
     """Mengambil tangkapan layar menggunakan Chromium headless Patchright."""
     target_url = resolve_target_url(url)
@@ -89,6 +90,32 @@ async def capture_screenshot(
         if delay > 0:
             print(f"[browser-screenshot] Jeda render: {delay} detik...")
             await page.wait_for_timeout(int(delay * 1000))
+
+        # Validasi Bot Challenge / Cloudflare Verification
+        page_title = await page.title()
+        page_content = await page.content()
+        title_lower = page_title.lower()
+        content_lower = page_content.lower()
+
+        challenge_in_title = any(k in title_lower for k in [
+            "just a moment...", "security verification", "attention required", "access denied", "403 forbidden"
+        ])
+        challenge_in_body = any(k in content_lower for k in [
+            "performing security verification",
+            "this website uses a security service to protect against malicious bots",
+            "checking if the site connection is secure",
+            "cf-browser-verification",
+            "challenge-platform",
+            "cf-turnstile",
+            "ray id:"
+        ])
+        is_bot_challenge = challenge_in_title or challenge_in_body
+        if is_bot_challenge:
+            print(f"[browser-screenshot] WARN: Terdeteksi halaman bot challenge/Cloudflare: '{page_title}'", file=sys.stderr)
+            if fail_on_challenge:
+                await browser.close()
+                print(f"[browser-screenshot] ERROR: Ditolak karena bot challenge pada URL: {target_url}", file=sys.stderr)
+                sys.exit(2)
 
         # Pengambilan screenshot
         if selector:
@@ -152,6 +179,7 @@ def main():
     parser.add_argument("--delay", type=float, default=2.0, help="Jeda rendering dalam detik setelah navigasi (default: 2.0)")
     parser.add_argument("--timeout", type=int, default=30, help="Batas waktu navigasi dalam detik (default: 30)")
     parser.add_argument("--dark-mode", action="store_true", help="Aktifkan prefers-color-scheme dark")
+    parser.add_argument("--fail-on-challenge", action="store_true", help="Gagal (exit code 2) jika terdeteksi halaman Cloudflare / bot challenge")
     parser.add_argument("--send-wa", help="JID WhatsApp tujuan pengiriman (misal: 62896xxx@s.whatsapp.net atau xxx@g.us)")
     parser.add_argument("--caption", default="", help="Keterangan teks untuk pengiriman WhatsApp")
 
@@ -168,7 +196,8 @@ def main():
         wait_selector=args.wait_selector,
         delay=args.delay,
         timeout_sec=args.timeout,
-        dark_mode=args.dark_mode
+        dark_mode=args.dark_mode,
+        fail_on_challenge=args.fail_on_challenge
     ))
 
     if args.send_wa:
