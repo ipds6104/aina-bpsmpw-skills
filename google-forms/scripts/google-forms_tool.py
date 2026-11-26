@@ -136,18 +136,8 @@ def cmd_create(args):
         "Content-Type": "application/json"
     }
 
-    info = {
-        "title": args.title,
-    }
-    if args.document_title:
-        info["documentTitle"] = args.document_title
-    else:
-        info["documentTitle"] = args.title
-
-    if args.desc:
-        info["description"] = args.desc
-
-    payload = {"info": info}
+    # Forms API v1: Only info.title can be set on initial create
+    payload = {"info": {"title": args.title}}
 
     resp = requests.post(FORMS_API_BASE, headers=headers, json=payload, timeout=DEFAULT_TIMEOUT)
     if resp.status_code != 200:
@@ -160,6 +150,21 @@ def cmd_create(args):
 
     data = resp.json()
     form_id = data.get("formId")
+
+    if args.desc:
+        try:
+            update_req = {
+                "requests": [{
+                    "updateFormInfo": {
+                        "info": {"description": args.desc},
+                        "updateMask": "description"
+                    }
+                }]
+            }
+            requests.post(f"{FORMS_API_BASE}/{form_id}:batchUpdate", headers=headers, json=update_req, timeout=DEFAULT_TIMEOUT)
+        except Exception:
+            pass
+
     responder_uri = data.get("responderUri")
     edit_uri = f"https://docs.google.com/forms/d/{form_id}/edit"
 
@@ -171,6 +176,18 @@ def cmd_create(args):
         "edit_url": edit_uri,
         "raw": data
     }
+
+    if getattr(args, "folder_id", None):
+        try:
+            r_get = requests.get(f"https://www.googleapis.com/drive/v3/files/{form_id}?fields=parents", headers={"Authorization": f"Bearer {token}"}, timeout=DEFAULT_TIMEOUT)
+            prev_parents = ",".join(r_get.json().get("parents", []))
+            move_url = f"https://www.googleapis.com/drive/v3/files/{form_id}?addParents={args.folder_id}&removeParents={prev_parents}&fields=id,parents"
+            r_move = requests.patch(move_url, headers={"Authorization": f"Bearer {token}"}, timeout=DEFAULT_TIMEOUT)
+            if r_move.status_code == 200:
+                out["folder_id"] = args.folder_id
+        except Exception as e:
+            out["folder_move_warning"] = str(e)
+
     print(json.dumps(out, indent=2, ensure_ascii=False))
 
 
@@ -354,6 +371,7 @@ def main():
     p_create.add_argument("--title", required=True, help="Judul form")
     p_create.add_argument("--desc", help="Deskripsi form")
     p_create.add_argument("--document-title", help="Judul dokumen file di Google Drive")
+    p_create.add_argument("--folder-id", help="ID folder Google Drive tujuan penempatan form")
     p_create.set_defaults(func=cmd_create)
 
     # get

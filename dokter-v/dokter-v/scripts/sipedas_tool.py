@@ -1,1 +1,0 @@
-/app/data/custom-skills/dokter-v/scripts/dokter_v_tool.py

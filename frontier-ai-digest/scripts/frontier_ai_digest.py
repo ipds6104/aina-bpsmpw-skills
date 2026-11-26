@@ -31,7 +31,7 @@ README_RAW_URL = "https://raw.githubusercontent.com/LikeACloud7/awesome-frontier
 WIB = timezone(timedelta(hours=7))
 
 # Helper Skrip Eksternal
-BROWSER_SCREENSHOT_SCRIPT = "/app/workspaces/default/.agents/skills/browser-screenshot/scripts/browser_screenshot.py"
+BROWSER_SCREENSHOT_SCRIPT = "/app/data/custom-skills/browser-screenshot/scripts/browser_screenshot.py"
 WA_TOOL_SCRIPT = "/app/workspaces/default/.agents/skills/whatsmeow/scripts/wa_tool.py"
 
 def load_history() -> dict:
@@ -100,13 +100,18 @@ def extract_arxiv_id(url: str) -> str:
         return match.group(1)
     return ""
 
+def extract_doi(url: str) -> str:
+    match = re.search(r"(10\.\d{4,9}/[^\s<>]+)", url)
+    if match:
+        return match.group(1).rstrip(".,;")
+    return ""
+
 def fetch_paper_abstract(paper_url: str) -> dict:
-    """Mengambil abstrak dan metadata paper (mendukung ArXiv API dan fallback Jina reader)."""
+    """Mengambil abstrak dan metadata paper (mendukung ArXiv API, DOI CrossRef/OpenAlex, dan Jina reader)."""
     arxiv_id = extract_arxiv_id(paper_url)
     
     # 1. Jalur Cepat & Akurat: ArXiv API
     if arxiv_id:
-        # Bersihkan versi (v1, v2) untuk query id_list
         base_id = re.sub(r"v\d+$", "", arxiv_id)
         api_url = f"https://export.arxiv.org/api/query?id_list={base_id}"
         try:
@@ -130,7 +135,58 @@ def fetch_paper_abstract(paper_url: str) -> dict:
         except Exception as e:
             print(f"[Warning] Gagal query ArXiv API: {e}", file=sys.stderr)
 
-    # 2. Jalur Web/Blog: Jina Reader atau Direct HTML
+    # 2. Jalur DOI: CrossRef API & OpenAlex API
+    doi = extract_doi(paper_url)
+    if doi:
+        # CrossRef
+        try:
+            api_url = f"https://api.crossref.org/works/{doi}"
+            req = urllib.request.Request(api_url, headers={"User-Agent": "Aina-Frontier-Digest/1.0 (mailto:admin@local.id)"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                msg = data.get("message", {})
+                raw_ab = msg.get("abstract", "")
+                if raw_ab:
+                    clean_ab = re.sub(r"<[^>]+>", " ", raw_ab)
+                    clean_ab = html.unescape(clean_ab)
+                    clean_ab = re.sub(r"\s+", " ", clean_ab).strip()
+                    title_list = msg.get("title", [])
+                    title = " ".join(title_list) if title_list else ""
+                    return {
+                        "source": "crossref_api",
+                        "title": title,
+                        "abstract": clean_ab,
+                        "url": paper_url
+                    }
+        except Exception as e:
+            print(f"[Warning] Gagal query CrossRef API: {e}", file=sys.stderr)
+
+        # OpenAlex
+        try:
+            api_url = f"https://api.openalex.org/works/https://doi.org/{doi}"
+            req = urllib.request.Request(api_url, headers={"User-Agent": "Aina-Frontier-Digest/1.0 (mailto:admin@local.id)"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                inv = data.get("abstract_inverted_index")
+                if inv:
+                    words = []
+                    for w, pos in inv.items():
+                        for p in pos:
+                            words.append((p, w))
+                    words.sort()
+                    clean_ab = " ".join(w for _, w in words)
+                    clean_ab = re.sub(r"\s+", " ", clean_ab).strip()
+                    title = data.get("display_name", "")
+                    return {
+                        "source": "openalex_api",
+                        "title": title,
+                        "abstract": clean_ab,
+                        "url": paper_url
+                    }
+        except Exception as e:
+            print(f"[Warning] Gagal query OpenAlex API: {e}", file=sys.stderr)
+
+    # 3. Jalur Web/Blog: Jina Reader atau Direct HTML
     jina_url = f"https://r.jina.ai/{paper_url}"
     try:
         req = urllib.request.Request(jina_url, headers={"User-Agent": "Mozilla/5.0"})
